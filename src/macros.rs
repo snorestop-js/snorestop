@@ -1,20 +1,37 @@
+use libloading::Symbol;
+use std::sync::Mutex;
+
+
 #[macro_export]
-macro_rules! gen_version_func {
+macro_rules! gen_version {
     ($name:ident) => {
         paste! {
-            static mut [<Original $name>]: Option<FARPROC> = None;
+            // static mut [<Original $name>]: FARPROC = 0 as FARPROC;
+
+            extern "C" {
+                static mut [<Original $name>]: FARPROC;
+            }
 
             #[no_mangle]
-            extern "stdcall" fn $name() {
+            #[naked]
+            extern "C" fn $name() {
                 unsafe {
-                    if let Some(proc) = [<Original $name>] {
-                        let t = proc;
-                        asm! {
-                           "jmp [{t}]",
-                            t = in(reg) t
-                        }
-                    }
-                }
+                    asm! {
+                       "jmp [{addr}]",
+                        addr = sym [<Original $name>],
+                        options(noreturn)
+                    };
+                    // if [<Original $name>].is_some() {
+                    //     // if proc as usize == 0 {
+                    //     //     printbox!("Error!", format!("{} was null!", stringify!([<Original $name>])).as_str());
+                    //     //     return;
+                    //     // }
+                    //     // let addr = [<Original $name>].unwrap().clone().into_raw().into_raw();
+                    //     let addr = [<Original $name>].unwrap();
+                    // } else {
+                    //     printbox!("Error!", format!("{} was not set!", stringify!([<Original $name>])).as_str());
+                    // }
+                };
             }
         }
     };
@@ -24,9 +41,9 @@ macro_rules! gen_version_func {
 macro_rules! version_func {
     ($module: expr, $name: ident) => {
         paste! {
-            let addr = winapi::um::libloaderapi::GetProcAddress($module, stringify!($name).as_ptr() as *const i8);
-            [<Original $name>] = Some(addr);
-            printbox!(stringify!($name), format!("{:08X}", addr as usize).as_str());
+            let addr: libloading::Symbol<FARPROC> = ($module).get(stringify!($name).as_bytes()).expect("problem in neverland");
+            [<Original $name>] = (addr.into_raw().into_raw());
+            // printbox!("woo", format!("{:08X} {}", [<Original $name>] as usize, stringify!($name)).as_str());
         }
     };
 }
