@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include "version.h"
 
 HMODULE version_dll;
@@ -62,6 +64,25 @@ void load_version() {
     WRAPPER_FUNC(VerQueryValueW);
 }
 
+DWORD WINAPI Load(LPVOID lpvoid) {
+    char* data = (char*) malloc(MAX_PATH);
+    GetModuleFileNameA(NULL, data, MAX_PATH);
+    if (strstr(data, "Among Us.exe")) {
+        HMODULE snorestop = LoadLibraryA("snorestop.dll");
+        if (!snorestop) {
+            MessageBoxA(NULL, "Error while loading snorestop\nReason: invalid dll", "snorestop", MB_OK);
+            exit(1);
+        }
+        FARPROC entrypoint = GetProcAddress(snorestop, "entrypoint");
+        if (!entrypoint) {
+            MessageBoxA(NULL, "Error while loading snorestop\nReason: failed to get endpoint", "snorestop", MB_OK);
+            exit(1);
+        }
+        entrypoint();
+    }
+    return 0;
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
     switch (ul_reason_for_call)
@@ -69,21 +90,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         case DLL_PROCESS_ATTACH:
             DisableThreadLibraryCalls(hModule);
             load_version();
-            char* data = (char*) malloc(MAX_PATH);
-            GetModuleFileNameA(NULL, data, MAX_PATH);
-            if (strstr(data, "Among Us.exe")) {
-                HMODULE snorestop = LoadLibrary("snorestop.dll");
-                if (!snorestop) {
-                    MessageBoxA(NULL, "Failed to load snorestop.dll!", "snorestop", MB_OK);
-                    return FALSE;
-                }
-                FARPROC entrypoint = GetProcAddress(snorestop, "entrypoint");
-                if (!entrypoint) {
-                    MessageBoxA(NULL, "Failed to get the entrypoint!", "snorestop", MB_OK);
-                    return FALSE;
-                }
-                entrypoint();
-            }
+            CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Load, hModule, NULL, NULL);
             break;
         case DLL_PROCESS_DETACH:
             FreeLibrary(version_dll);
