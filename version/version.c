@@ -29,7 +29,7 @@ WRAPPER_GENFUNC(VerLanguageNameW)
 WRAPPER_GENFUNC(VerQueryValueA)
 WRAPPER_GENFUNC(VerQueryValueW)
 
-#define WRAPPER_FUNC(name) o##name = GetProcAddress(version_dll, ###name)
+#define WRAPPER_FUNC(name) o##name = GetProcAddress(version_dll, ###name);
 
 void load_version() {
     char systemPath[MAX_PATH];
@@ -90,7 +90,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         case DLL_PROCESS_ATTACH:
             DisableThreadLibraryCalls(hModule);
             load_version();
-            CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Load, hModule, NULL, NULL);
+//            CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Load, hModule, NULL, NULL);
+            Load(0);
             break;
         case DLL_PROCESS_DETACH:
             FreeLibrary(version_dll);
