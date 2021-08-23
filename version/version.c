@@ -29,7 +29,7 @@ WRAPPER_GENFUNC(VerLanguageNameW)
 WRAPPER_GENFUNC(VerQueryValueA)
 WRAPPER_GENFUNC(VerQueryValueW)
 
-#define WRAPPER_FUNC(name) o##name = GetProcAddress(version_dll, ###name);
+#define WRAPPER_FUNC(name) o##name = GetProcAddress(version_dll, ###name)
 
 void load_version() {
     char systemPath[MAX_PATH];

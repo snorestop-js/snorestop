@@ -1,0 +1,12 @@
+[package]
+name = "snorestop"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+winapi = { version = "0.3.9", features = ["winuser", "windef", "libloaderapi", "consoleapi", "winnt", "sysinfoapi", "wincon", "processthreadsapi"] }
+nodejs = { path = "../../rust-nodejs" }
+paste = "1.0.5"

@@ -1,4 +1,5 @@
 use winapi::um::consoleapi::AllocConsole;
+use std::io::Read;
 
 #[no_mangle]
 pub extern "C" fn entrypoint() {
@@ -6,7 +7,9 @@ pub extern "C" fn entrypoint() {
         /*std::thread::spawn(||*/ if std::env::current_exe().expect("how").file_name().expect("no???") == "Among Us.exe" {
             AllocConsole();
 
-            println!("Sex");
+            let mut x = [0u8; 8];
+            std::io::stdin().lock().read(&mut x).expect("fuck");
+            println!("Sex {}", String::from_utf8_lossy(&x));
             let (tx, rx) = std::sync::mpsc::sync_channel::<String>(0);
             println!("Sex");
             let channel = nodejs::channel();
