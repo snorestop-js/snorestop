@@ -45,7 +45,7 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
         println!("OMG NO WAY LFG EZ {}", CStr::from_ptr(domain_name).to_string_lossy());
         Il2cppInitDetour.disable().expect("failed to disable hook");
         let output = Il2cppInitDetour.call(domain_name);
-        Il2cppInitDetour.enable().expect("failed to reenable hook");
+        Il2cppInitDetour.enable().expect("failed to re-enable hook");
 
         //il2cpp has initialized by this point :)
 
