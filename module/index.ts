@@ -1,7 +1,7 @@
-import ffi from "ffi";
+export { SnorestopModule } from "./module";
 
 export class Snorestop {
   load(packageJson: any, packageIndexPath: string): void {
-    require(packageIndexPath);
+    new (require(packageIndexPath).default)();
   }
 }

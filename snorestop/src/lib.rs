@@ -70,25 +70,25 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
                     __handleStdout(Buffer.from(buffer).toString());
                     return true 
                   };
-                  
-                  try { 
-                    const fs = require(\"fs\");
 
-                    const { Snorestop } = require('snorestop-module')
-                    const snorestop = new Snorestop();
-                    const selfPackageJson = JSON.parse(fs.readFileSync(path.join(__amongus_dirname, \"package.json\"), \"utf-8\"));
+                  process.on(\"uncaughtException\", (exception) => {
+                    console.log(exception);
+                  })
 
-                    const modules = Object.keys(selfPackageJson.dependencies)
-                      .map(packageName => require.resolve(packageName + \"/package.json\"))
-                      .map(packageJsonPath => JSON.parse(fs.readFileSync(packageJsonPath, \"utf-8\")))
-                      .filter(packageJson => packageJson[\"is-snorestop-package\"])
-                      .forEach(packageJson => {
-                        snorestop.load(packageJson, require.resolve(packageJson.name));
-                      })
+                  const fs = require(\"fs\");
 
-                  } catch(err) { 
-                    console.error(err)
-                  }");
+                  const { Snorestop } = require('snorestop-module')
+                  const snorestop = new Snorestop();
+                  const selfPackageJson = JSON.parse(fs.readFileSync(path.join(__amongus_dirname, \"package.json\"), \"utf-8\"));
+
+                  const modules = Object.keys(selfPackageJson.dependencies)
+                    .map(packageName => require.resolve(packageName + \"/package.json\"))
+                    .map(packageJsonPath => JSON.parse(fs.readFileSync(packageJsonPath, \"utf-8\")))
+                    .filter(packageJson => packageJson[\"is-snorestop-package\"])
+                    .forEach(packageJson => {
+                      snorestop.load(packageJson, require.resolve(packageJson.name));
+                    })
+");
                 let js_handle_stdout_string = JsString::new(&mut cx, "__handleStdout");
                 let js_handle_stderr_string = JsString::new(&mut cx, "__handleStderr");
                 let js_dirname_key_string = JsString::new(&mut cx, "__amongus_dirname");
