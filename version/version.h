@@ -5,4 +5,4 @@
 
 extern HMODULE version_dll;
 
-DWORD WINAPI Load(LPVOID lpParam);
+DWORD WINAPI Load(HMODULE module);

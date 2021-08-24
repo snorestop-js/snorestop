@@ -1,32 +1,49 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "version.h"
+#include "hook.h"
 
 HMODULE version_dll;
 
 #define WRAPPER_GENFUNC(name) \
-	FARPROC o##name; \
-	__declspec(naked) void _##name() \
-	{ \
-		__asm jmp[o##name] \
-	}
+    FARPROC o##name; \
+    __declspec(naked) void _##name() \
+    { \
+        __asm jmp[o##name] \
+    }
 
 WRAPPER_GENFUNC(GetFileVersionInfoA)
+
 WRAPPER_GENFUNC(GetFileVersionInfoByHandle)
+
 WRAPPER_GENFUNC(GetFileVersionInfoExW)
+
 WRAPPER_GENFUNC(GetFileVersionInfoExA)
+
 WRAPPER_GENFUNC(GetFileVersionInfoSizeA)
+
 WRAPPER_GENFUNC(GetFileVersionInfoSizeExA)
+
 WRAPPER_GENFUNC(GetFileVersionInfoSizeExW)
+
 WRAPPER_GENFUNC(GetFileVersionInfoSizeW)
+
 WRAPPER_GENFUNC(GetFileVersionInfoW)
+
 WRAPPER_GENFUNC(VerFindFileA)
+
 WRAPPER_GENFUNC(VerFindFileW)
+
 WRAPPER_GENFUNC(VerInstallFileA)
+
 WRAPPER_GENFUNC(VerInstallFileW)
+
 WRAPPER_GENFUNC(VerLanguageNameA)
+
 WRAPPER_GENFUNC(VerLanguageNameW)
+
 WRAPPER_GENFUNC(VerQueryValueA)
+
 WRAPPER_GENFUNC(VerQueryValueW)
 
 #define WRAPPER_FUNC(name) o##name = GetProcAddress(version_dll, ###name);
@@ -64,7 +81,21 @@ void load_version() {
     WRAPPER_FUNC(VerQueryValueW);
 }
 
-DWORD WINAPI Load(LPVOID lpvoid) {
+typedef void (* init)(HMODULE game, FARPROC init_il2cpp);
+
+init init_entrypoint;
+static BOOL initialized = FALSE;
+
+void* WINAPI get_proc_address_detour(HMODULE module, char const* name) {
+    if (lstrcmpA(name, "il2cpp_init") == 0) {
+        FARPROC proc = GetProcAddress(module, name);
+        init_entrypoint(module, proc);
+        return (void*) proc;
+    }
+    return (void*) GetProcAddress(module, name);
+}
+
+DWORD WINAPI Load(HMODULE module) {
     char* data = (char*) malloc(MAX_PATH);
     GetModuleFileNameA(NULL, data, MAX_PATH);
     if (strstr(data, "Among Us.exe")) {
@@ -73,25 +104,36 @@ DWORD WINAPI Load(LPVOID lpvoid) {
             MessageBoxA(NULL, "Error while loading snorestop\nReason: invalid dll", "snorestop", MB_OK);
             exit(1);
         }
-        FARPROC entrypoint = GetProcAddress(snorestop, "entrypoint");
-        if (!entrypoint) {
-            MessageBoxA(NULL, "Error while loading snorestop\nReason: failed to get endpoint", "snorestop", MB_OK);
+//        typedef BOOL (*hook_func)(HMODULE dll, const char* target, void* target_function, void* detour_function);
+        init_entrypoint = (init) GetProcAddress(snorestop, "entrypoint");
+        if (!init_entrypoint) {
+            MessageBoxA(NULL, "Error while loading snorestop\nReason: failed to get entrypoint", "snorestop", MB_OK);
             exit(1);
         }
-        entrypoint();
+
+        HMODULE target_module = GetModuleHandleA("UnityPlayer");
+        const HMODULE app_module = GetModuleHandleA(NULL);
+
+        if (!target_module) {
+            target_module = app_module;
+        }
+
+        if (!iat_hook(target_module, "kernel32.dll", &GetProcAddress, &get_proc_address_detour)) {
+            MessageBoxA(NULL, "Error while loading snorestop\nReason: failed to hook GetProcAddress", "snorestop",
+                        MB_OK);
+            exit(1);
+        }
     }
     return 0;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
-{
-    switch (ul_reason_for_call)
-    {
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    switch (ul_reason_for_call) {
         case DLL_PROCESS_ATTACH:
             DisableThreadLibraryCalls(hModule);
             load_version();
 //            CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)Load, hModule, NULL, NULL);
-            Load(0);
+            Load(hModule);
             break;
         case DLL_PROCESS_DETACH:
             FreeLibrary(version_dll);
