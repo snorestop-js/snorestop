@@ -83,7 +83,11 @@ void load_version() {
 
 typedef void (* init)(HMODULE game, FARPROC init_il2cpp);
 
+typedef void (* iat_load)(HMODULE module, const wchar_t* name);
+
+HMODULE snorestop;
 init init_entrypoint;
+iat_load iat_snorestop_load;
 static BOOL initialized = FALSE;
 
 void* WINAPI get_proc_address_detour(HMODULE module, char const* name) {
@@ -95,11 +99,19 @@ void* WINAPI get_proc_address_detour(HMODULE module, char const* name) {
     return (void*) GetProcAddress(module, name);
 }
 
+HMODULE WINAPI load_library_node_detour(wchar_t const* name) {
+    HMODULE library = LoadLibraryW(name);
+//    MessageBeep(MB_OK);
+//    MessageBoxW(NULL, name, L"OK", MB_OK);
+//    iat_snorestop_load(library, name);
+    return library;
+}
+
 DWORD WINAPI Load(HMODULE module) {
     char* data = (char*) malloc(MAX_PATH);
     GetModuleFileNameA(NULL, data, MAX_PATH);
     if (strstr(data, "Among Us.exe")) {
-        HMODULE snorestop = LoadLibraryA("snorestop.dll");
+        snorestop = LoadLibraryA("snorestop.dll");
         if (!snorestop) {
             MessageBoxA(NULL, "Error while loading snorestop\nReason: invalid dll", "snorestop", MB_OK);
             exit(1);
@@ -111,6 +123,12 @@ DWORD WINAPI Load(HMODULE module) {
             exit(1);
         }
 
+//        iat_snorestop_load = (iat_load) GetProcAddress(snorestop, "iat_load");
+//        if (!iat_snorestop_load) {
+//            MessageBoxA(NULL, "Error while loading snorestop\nReason: failed to get iat_load", "snorestop", MB_OK);
+//            exit(1);
+//        }
+
         HMODULE target_module = GetModuleHandleA("UnityPlayer");
         const HMODULE app_module = GetModuleHandleA(NULL);
 
@@ -118,7 +136,8 @@ DWORD WINAPI Load(HMODULE module) {
             target_module = app_module;
         }
 
-        if (!iat_hook(target_module, "kernel32.dll", &GetProcAddress, &get_proc_address_detour)) {
+        if (!iat_hook(target_module, "kernel32.dll", &GetProcAddress, &get_proc_address_detour)/* ||
+            !iat_hook(snorestop, "kernel32.dll", &LoadLibraryW, &load_library_node_detour)*/) {
             MessageBoxA(NULL, "Error while loading snorestop\nReason: failed to hook GetProcAddress", "snorestop",
                         MB_OK);
             exit(1);
