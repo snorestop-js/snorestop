@@ -4,8 +4,7 @@ use std::mem::transmute;
 use std::os::raw::c_char;
 
 use std::convert::TryInto;
-use std::{ffi::CString, mem::transmute};
-use std::os::raw::c_char;
+use std::ffi::CString;
 use std::ffi::CStr;
 use detour::static_detour;
 use nodejs::{
@@ -90,28 +89,6 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
                 cx.global().set(&mut cx, js_handle_stdout_string, js_handle_stdout).expect("failed to set stdout handler global");
                 cx.global().set(&mut cx, js_handle_stderr_string, js_handle_stderr).expect("failed to set stderr handler global");
                 cx.global().set(&mut cx, js_dirname_key_string, js_dirname_string).expect("failed to set stderr handler global");
-
-                let lib = Library::new("./GameAssembly.dll").unwrap();
-
-                unsafe {
-                    let il2cppDomainGet: Symbol<Il2CppDomainGetFunc> = lib.get(b"il2cpp_domain_get").unwrap();
-                    let il2cppDomainGetAssemblies: Symbol<Il2CppDomainGetAssemblies> = lib.get(b"il2cpp_domain_get_assemblies").unwrap();
-                    let il2CppAssemblyGetImage: Symbol<IL2CppAssemblyGetImage> = lib.get(b"il2cpp_assembly_get_image").unwrap();
-                    let il2CppImageGetName: Symbol<Il2CppImageGetName> = lib.get(b"il2cpp_image_get_name").unwrap();
-
-                    let domain = il2cppDomainGet();
-                    println!("DOMAIN: {}", domain);
-                    let assembliesCount = 0;
-                    let assemblies = il2cppDomainGetAssemblies(domain, &assembliesCount);
-                    println!("AsmCount {}", assembliesCount);
-
-                    for i in 0..assembliesCount {
-                        let image = il2CppAssemblyGetImage(*((assemblies as u32 + (i * 4) as u32) as *const u32));
-                        let name = CStr::from_ptr(il2CppImageGetName(image)).to_str().unwrap().to_owned();
-
-                        println!("Image {}", name);
-                    }
-                }
 
                 eval(&mut cx, string).unwrap();
                 sender.send(()).unwrap();

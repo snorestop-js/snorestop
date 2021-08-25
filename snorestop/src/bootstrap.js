@@ -16,7 +16,7 @@ try {
     const fs = require("fs");
     // globalThis.require = require("module").createRequire(path.join(process.cwd(), "snorestop"));
 
-    const { Snorestop } = require('snorestop-module')
+    const { Snorestop } = require('snorestop-core')
     const snorestop = new Snorestop();
     const selfPackageJson = JSON.parse(fs.readFileSync(path.join(__amongus_dirname, "package.json"), "utf-8"));
     Object.prototype.log = function (...data) {
