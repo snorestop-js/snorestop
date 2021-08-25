@@ -1,4 +1,5 @@
 mod iat;
+mod bindings;
 
 use std::mem::transmute;
 use std::os::raw::c_char;
@@ -28,7 +29,6 @@ use winapi::shared::minwindef::{FARPROC, HMODULE};
 use winapi::um::consoleapi::AllocConsole;
 use std::io::{self, Write};
 use std::env;
-use winapi::ctypes::wchar_t;
 
 static_detour! {
     static Il2cppInitDetour: unsafe extern "C" fn(*const c_char) -> bool;
@@ -67,12 +67,15 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
         let output = Il2cppInitDetour.call(domain_name);
         Il2cppInitDetour.enable().expect("failed to re-enable hook");
 
+
         //il2cpp has initialized by this point :)
 
         {
             let channel = nodejs::channel();
             let (sender, receiver) = std::sync::mpsc::sync_channel(1);
             channel.send(move |mut cx| {
+                bindings::load_functions(GAME_ASSEMBLY, &mut cx);
+
                 let string = cx.string(include_str!("./bootstrap.js"));
                 let js_handle_stdout_string = cx.string("__handleStdout");
                 let js_handle_stderr_string = cx.string("__handleStderr");
@@ -101,10 +104,15 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
     }
 }
 
+pub static mut GAME_ASSEMBLY: HMODULE = 0 as HMODULE;
+
 #[no_mangle]
-pub extern "C" fn entrypoint(_assembly: HMODULE, proc: FARPROC) {
+pub extern "C" fn entrypoint(game_assembly: HMODULE, proc: FARPROC) {
     unsafe {
         AllocConsole();
+
+        GAME_ASSEMBLY = game_assembly;
+
         let o: Il2cppInit = transmute(proc);
         Il2cppInitDetour.initialize(o, il2cpp_init).unwrap();
         Il2cppInitDetour.enable().expect("failed to hook il2cpp_init");
