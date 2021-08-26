@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::ffi::{CStr, CString};
 use std::mem::transmute;
 use std::os::raw::{c_char, c_void};
@@ -5,7 +6,7 @@ use nodejs::neon::context::{Context, FunctionContext};
 use nodejs::neon::handle::Handle;
 use nodejs::neon::object::Object;
 use nodejs::neon::result::JsResult;
-use nodejs::neon::types::{JsArray, JsFunction, JsNumber, JsString, JsUndefined, JsArrayBuffer};
+use nodejs::neon::types::{JsArray, JsArrayBuffer, JsBoolean, JsFunction, JsNumber, JsString, JsUndefined, JsValue, Value};
 use paste::paste;
 use winapi::shared::minwindef::HMODULE;
 use winapi::um::libloaderapi::GetProcAddress;
@@ -50,8 +51,17 @@ gen_statics! {
     il2cpp_class_get_fields = (*mut c_void, *mut usize) -> *mut c_void,
     il2cpp_field_get_parent = (*mut c_void) -> *mut c_void,
     il2cpp_field_get_name = (*mut c_void) -> *mut c_char,
+    il2cpp_field_static_get_value = (*mut c_void, *mut u32) -> c_void,
+    il2cpp_field_get_type = (*mut c_void) -> *mut c_void,
+    il2cpp_type_get_name = (*mut c_void) -> *mut c_char,
+    il2cpp_type_get_type = (*mut c_void) -> usize,
+    il2cpp_type_is_static = (*mut c_void) -> bool,
+    il2cpp_array_length = (*mut usize) -> usize,
+    il2cpp_array_get_byte_length = (*mut usize) -> usize,
     il2cpp_domain_get = () -> *mut c_void,
     il2cpp_domain_get_assemblies = (*mut c_void, *mut usize) -> *mut *mut c_void,
+    il2cpp_class_get_field_from_name = (*mut usize, *mut c_char) -> *mut *mut c_void,
+    il2cpp_object_get_class = (*mut usize) -> *mut c_char,
     il2cpp_alloc = (usize) -> *mut c_void
 }
 
@@ -171,8 +181,7 @@ fn class_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
 fn field_get_parent(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(unsafe {
         let domain: Handle<JsNumber> = cx.argument(0)?;
-        let domain2: Handle<JsNumber> = cx.argument(1)?;
-        let str_ptr = il2cpp_field_get_parent.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, domain2.value(&mut cx) as usize);
+        let str_ptr = il2cpp_field_get_parent.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
         cx.number(str_ptr as u32)
     })
 }
@@ -185,12 +194,115 @@ fn field_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
     })
 }
 
+fn field_static_get_value(mut cx: FunctionContext) -> JsResult<JsValue> {
+    unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let a_buffer: Handle<JsBoolean> = cx.argument(1)?;
+        let d_size: Handle<JsNumber> = cx.argument(2)?;
+
+        if (a_buffer.value(&mut cx)) {
+          let mut resSlice = vec![0u8; d_size.value(&mut cx) as usize];
+          il2cpp_field_static_get_value.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, resSlice.as_mut_ptr() as *mut u32);
+          return Ok(JsArrayBuffer::external(&mut cx, resSlice).as_value(&mut cx));
+        } else {
+          if (d_size.value(&mut cx) > 4.0 || d_size.value(&mut cx) == 3.0) {
+            panic!("d_size cannot be greater than 4 or 3 when as_buffer is false");
+          }
+
+          if (d_size.value(&mut cx) == 4.0) {
+            let mut res = 0;
+            il2cpp_field_static_get_value.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, &mut res);
+            return Ok(cx.number(res).as_value(&mut cx));
+          }
+
+          if (d_size.value(&mut cx) == 2.0) {
+            let mut res: i16 = 0;
+            il2cpp_field_static_get_value.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, &mut (res as u32));
+            return Ok(cx.number(res).as_value(&mut cx));
+          }
+
+          if (d_size.value(&mut cx) == 1.0) {
+            let mut res: i8 = 0;
+            il2cpp_field_static_get_value.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, &mut (res as u32));
+            return Ok(cx.number(res).as_value(&mut cx));
+          }
+
+          return Ok(cx.undefined().as_value(&mut cx))
+        }
+    }
+}
+
+fn field_get_type(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let str_ptr = il2cpp_field_get_type.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.number(str_ptr as u32)
+    })
+}
+
+fn type_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
+    Ok(unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let str_ptr = il2cpp_type_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.string(CStr::from_ptr(str_ptr).to_str().expect("Failed to unwrap str_ptr"))
+    })
+}
+
+fn type_get_type(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let str_ptr = il2cpp_type_get_type.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.number(str_ptr as u32)
+    })
+}
+
+fn type_is_static(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+    Ok(unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let str_ptr = il2cpp_type_is_static.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.boolean(str_ptr)
+    })
+}
+
 fn class_from_name(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(unsafe {
       let domain: Handle<JsNumber> = cx.argument(0)?;
       let domain2: Handle<JsString> = cx.argument(1)?;
       let domain3: Handle<JsString> = cx.argument(2)?;
       let strPtr = il2cpp_class_from_name.unwrap()(domain.value(&mut cx) as i32 as *mut usize, CString::new(domain2.value(&mut cx)).unwrap().as_ptr() as *mut c_char, CString::new(domain3.value(&mut cx)).unwrap().as_ptr() as *mut c_char);
+      cx.number(strPtr as u32)
+    })
+}
+
+fn array_length(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+      let domain: Handle<JsNumber> = cx.argument(0)?;
+      let strPtr = il2cpp_array_length.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      cx.number(strPtr as u32)
+    })
+}
+
+fn array_get_byte_length(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+      let domain: Handle<JsNumber> = cx.argument(0)?;
+      let strPtr = il2cpp_array_get_byte_length.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      cx.number(strPtr as u32)
+    })
+}
+
+fn object_get_class(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+      let domain: Handle<JsNumber> = cx.argument(0)?;
+      let strPtr = il2cpp_object_get_class.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      cx.number(strPtr as u32)
+    })
+}
+
+fn class_get_field_from_name(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+      let domain: Handle<JsNumber> = cx.argument(0)?;
+      let domain2: Handle<JsString> = cx.argument(1)?;
+      let strPtr = il2cpp_class_get_field_from_name.unwrap()(domain.value(&mut cx) as i32 as *mut usize, CString::new(domain2.value(&mut cx)).unwrap().as_ptr() as *mut c_char);
       cx.number(strPtr as u32)
     })
 }
@@ -237,6 +349,18 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) {
     get_proc!(module, il2cpp_class_get_namespace);
     get_proc!(module, il2cpp_class_get_name);
     get_proc!(module, il2cpp_class_from_name);
+    get_proc!(module, il2cpp_class_get_fields);
+    get_proc!(module, il2cpp_field_get_parent);
+    get_proc!(module, il2cpp_field_get_name);
+    get_proc!(module, il2cpp_field_static_get_value);
+    get_proc!(module, il2cpp_field_get_type);
+    get_proc!(module, il2cpp_type_get_name);
+    get_proc!(module, il2cpp_type_get_type);
+    get_proc!(module, il2cpp_type_is_static);
+    get_proc!(module, il2cpp_array_length);
+    get_proc!(module, il2cpp_array_get_byte_length);
+    get_proc!(module, il2cpp_object_get_class);
+    get_proc!(module, il2cpp_class_get_field_from_name);
     get_proc!(module, il2cpp_alloc);
     set!(global_obj, cx, cx.string("il2cpp_domain_get"), JsFunction::new(cx, domain_get).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_domain_get_assemblies"), JsFunction::new(cx, domain_get_assemblies).expect("failed to create a js_function"));
@@ -251,6 +375,18 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) {
     set!(global_obj, cx, cx.string("il2cpp_domain_get"), JsFunction::new(cx, domain_get).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_domain_get_assemblies"), JsFunction::new(cx, domain_get_assemblies).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_class_from_name"), JsFunction::new(cx, class_from_name).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_class_get_fields"), JsFunction::new(cx, class_get_fields).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_field_get_parent"), JsFunction::new(cx, field_get_parent).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_field_get_name"), JsFunction::new(cx, field_get_name).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_field_static_get_value"), JsFunction::new(cx, field_static_get_value).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_field_get_type"), JsFunction::new(cx, field_get_type).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_type_get_name"), JsFunction::new(cx, type_get_name).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_type_get_type"), JsFunction::new(cx, type_get_type).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_type_is_static"), JsFunction::new(cx, type_is_static).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_array_length"), JsFunction::new(cx, array_length).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_array_get_byte_length"), JsFunction::new(cx, array_length).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_object_get_class"), JsFunction::new(cx, object_get_class).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_class_get_field_from_name"), JsFunction::new(cx, class_get_field_from_name).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_alloc"), JsFunction::new(cx, alloc).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("snorestop_create_buffer"), JsFunction::new(cx, create_buffer_js).expect("failed to create a js_function"));
     set!(cx.global(), cx, "__IL2CPP", global_obj);
