@@ -54,6 +54,8 @@ gen_statics! {
     il2cpp_field_get_name = (*mut c_void) -> *mut c_char,
     il2cpp_field_static_get_value = (*mut c_void, *mut u32) -> c_void,
     il2cpp_field_get_type = (*mut c_void) -> *mut c_void,
+    il2cpp_method_get_class = (*mut c_void) -> *mut c_void,
+    il2cpp_method_get_name = (*mut c_void) -> *mut c_char,
     il2cpp_type_get_name = (*mut c_void) -> *mut c_char,
     il2cpp_type_get_type = (*mut c_void) -> usize,
     il2cpp_type_is_static = (*mut c_void) -> bool,
@@ -195,14 +197,6 @@ fn field_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
     })
 }
 
-fn method_get_class(mut cx: FunctionContext) -> JsResult<JsNumber> {
-    unsafe {
-        let domain: Handle<JsNumber> = cx.argument(0)?;
-        let str_ptr = il2cpp_method_get_class.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
-        return Ok(cx.number(str_ptr as u32));
-    }
-}
-
 fn field_static_get_value(mut cx: FunctionContext) -> JsResult<JsValue> {
     unsafe {
         let domain: Handle<JsNumber> = cx.argument(0)?;
@@ -249,10 +243,26 @@ fn field_get_type(mut cx: FunctionContext) -> JsResult<JsNumber> {
     })
 }
 
+fn method_get_class(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let str_ptr = il2cpp_method_get_class.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        return Ok(cx.number(str_ptr as u32));
+    }
+}
+
 fn method_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
     Ok(unsafe {
         let domain: Handle<JsNumber> = cx.argument(0)?;
         let str_ptr = il2cpp_method_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.string(CStr::from_ptr(str_ptr).to_str().expect("Failed to unwrap str_ptr"))
+    })
+}
+
+fn type_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
+    Ok(unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let str_ptr = il2cpp_type_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
         cx.string(CStr::from_ptr(str_ptr).to_str().expect("Failed to unwrap str_ptr"))
     })
 }
@@ -330,7 +340,7 @@ fn class_get_field_from_name(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(unsafe {
         let domain: Handle<JsNumber> = cx.argument(0)?;
         let domain2: Handle<JsString> = cx.argument(1)?;
-        let strPtr = il2cpp_class_get_field_from_name.unwrap()(domain.value(&mut cx) as i32 as *mut usize, CString::new(domain2.value(&mut cx)).unwrap().as_ptr() as *mut c_char);
+        let strPtr = il2cpp_class_get_field_from_name.unwrap()(domain.value(&mut cx) as i32 as *mut usize, CString::new(domain2.value(&mut cx)).unwrap().into_raw() as *mut c_char);
         cx.number(strPtr as u32)
     })
 }
