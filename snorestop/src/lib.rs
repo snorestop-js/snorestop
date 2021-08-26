@@ -36,13 +36,6 @@ static_detour! {
 
 type Il2cppInit = unsafe extern "C" fn(*const c_char) -> bool;
 
-type ShutdownFunc = unsafe fn() -> ();
-
-type Il2CppDomainGetFunc = unsafe fn() -> u32;
-type Il2CppDomainGetAssemblies = unsafe fn(u32, &u32) -> *const u32;
-type IL2CppAssemblyGetImage = unsafe fn(u32) -> u32;
-type Il2CppImageGetName = unsafe fn(u32) -> *const c_char;
-
 fn __handle_stdout(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     if cx.len() > 0 {
         let arg: Handle<JsString> = cx.argument(0).unwrap();

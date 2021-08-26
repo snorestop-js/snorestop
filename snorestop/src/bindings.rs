@@ -51,6 +51,30 @@ gen_statics! {
     il2cpp_alloc = (usize) -> *mut u8
 }
 
+fn create_buffer(mut cx: FunctionContext, size: u32, address: Option<*mut u8>,) -> JsResult<JsArrayBuffer> {
+    if let Some(address) = address {
+        let array_buffer = unsafe { JsArrayBuffer::external(&mut cx, std::slice::from_raw_parts_mut(address, size as usize)) };
+        set!(array_buffer, &mut cx, cx.string("ptr"), cx.number(address as usize as f64));
+        Ok(array_buffer)
+    } else {
+        let mut buffer = &mut vec![0u8; size as usize][..];
+        let ptr = buffer.as_mut_ptr();
+        let array_buffer = JsArrayBuffer::external(&mut cx, &mut buffer);
+        set!(array_buffer, &mut cx, cx.string("ptr"), cx.number(ptr as usize as f64));
+        Ok(array_buffer)
+    }
+}
+
+fn create_buffer_js(mut cx: FunctionContext) -> JsResult<JsArrayBuffer> {
+    let size: Handle<JsNumber> = cx.argument(0)?;
+    let address = cx.argument_opt(1).map(|arg| {
+        let number: Handle<JsNumber>  = arg.downcast_or_throw(&mut cx).unwrap();
+        number.value(&mut cx) as usize as *mut u8
+    });
+    let size = size.value(&mut cx) as u32;
+    create_buffer(cx, size, address)
+}
+
 fn domain_get(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(cx.number(unsafe { il2cpp_domain_get.unwrap()() } as i32 as f64))
 }
@@ -141,11 +165,8 @@ fn alloc(mut cx: FunctionContext) -> JsResult<JsArrayBuffer> {
     if size > u32::MAX as f64 {
         panic!("Cannot allocate >4GB buffers!");
     }
-    let buffer = unsafe {
-        let memory = il2cpp_alloc.unwrap()(size as i32 as usize);
-        std::slice::from_raw_parts_mut(memory, size as usize)
-    };
-    Ok(JsArrayBuffer::external(&mut cx, buffer))
+    let buffer = unsafe { il2cpp_alloc.unwrap()(size as i32 as usize) };
+    create_buffer(cx, size as u32, Some(buffer))
 }
 
 pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) {
@@ -174,5 +195,6 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) {
     set!(global_obj, cx, cx.string("il2cpp_domain_get"), JsFunction::new(cx, domain_get).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_domain_get_assemblies"), JsFunction::new(cx, domain_get_assemblies).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_alloc"), JsFunction::new(cx, alloc).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("snorestop_create_buffer"), JsFunction::new(cx, create_buffer_js).expect("failed to create a js_function"));
     set!(cx.global(), cx, "__IL2CPP", global_obj);
 }
