@@ -48,8 +48,8 @@ gen_statics! {
     il2cpp_class_get_namespace = (*mut c_void) -> *mut c_char,
     il2cpp_class_get_name = (*mut c_void) -> *mut c_char,
     il2cpp_class_get_fields = (*mut c_void, *mut usize) -> *mut c_void,
-    il2cpp_field_get_parent = (*mut c_void) -> *mut c_void
-    il2cpp_field_get_name = (*mut c_void) -> *mut c_char
+    il2cpp_field_get_parent = (*mut c_void) -> *mut c_void,
+    il2cpp_field_get_name = (*mut c_void) -> *mut c_char,
     il2cpp_domain_get = () -> *mut c_void,
     il2cpp_domain_get_assemblies = (*mut c_void, *mut usize) -> *mut *mut c_void,
     il2cpp_alloc = (usize) -> *mut c_void
