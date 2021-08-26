@@ -45,7 +45,7 @@ gen_statics! {
     il2cpp_image_get_class_count = (*mut usize) -> usize,
     il2cpp_image_get_class = (*mut usize, usize) -> *mut usize,
     il2cpp_class_get_namespace = (*mut usize) -> *mut c_char,
-    il2cpp_class_get_name = (*mut usize) -> *mut c_char
+    il2cpp_class_get_name = (*mut usize) -> *mut c_char,
     il2cpp_domain_get = () -> *mut u8,
     il2cpp_domain_get_assemblies = (*mut u8, *mut u8) -> *mut *mut u8,
     il2cpp_alloc = (usize) -> *mut u8
