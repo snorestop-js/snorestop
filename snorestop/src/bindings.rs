@@ -67,5 +67,5 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) {
     get_proc!(module, il2cpp_domain_get_assemblies);
     set!(global_obj, cx, cx.string("il2cpp_domain_get"), JsFunction::new(cx, domain_get).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_domain_get_assemblies"), JsFunction::new(cx, domain_get_assemblies).expect("failed to create a js_function"));
-    set!(cx.global(), cx, "IL2CPP", global_obj);
+    set!(cx.global(), cx, "__IL2CPP", global_obj);
 }
