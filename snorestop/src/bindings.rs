@@ -38,6 +38,7 @@ macro_rules! get_proc {
 }
 
 gen_statics! {
+    il2cpp_class_from_name = (*mut usize, *mut c_char, *mut c_char) -> *mut usize,
     il2cpp_assembly_get_image = (*mut c_void) -> *mut c_void,
     il2cpp_image_get_name = (*mut c_void) -> *mut c_char,
     il2cpp_image_get_filename = (*mut c_void) -> *mut c_char,
@@ -184,6 +185,16 @@ fn field_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
     })
 }
 
+fn class_from_name(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+      let domain: Handle<JsNumber> = cx.argument(0)?;
+      let domain2: Handle<JsString> = cx.argument(1)?;
+      let domain3: Handle<JsString> = cx.argument(2)?;
+      let strPtr = il2cpp_class_from_name.unwrap()(domain.value(&mut cx) as i32 as *mut usize, CString::new(domain2.value(&mut cx)).unwrap().as_ptr() as *mut c_char, CString::new(domain3.value(&mut cx)).unwrap().as_ptr() as *mut c_char);
+      cx.number(strPtr as u32)
+    })
+}
+
 fn class_get_fields(mut cx: FunctionContext) -> JsResult<JsArray> {
     let class: Handle<JsNumber> = cx.argument(0)?;
     let class = class.value(&mut cx);
@@ -225,6 +236,7 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) {
     get_proc!(module, il2cpp_image_get_class);
     get_proc!(module, il2cpp_class_get_namespace);
     get_proc!(module, il2cpp_class_get_name);
+    get_proc!(module, il2cpp_class_from_name);
     get_proc!(module, il2cpp_alloc);
     set!(global_obj, cx, cx.string("il2cpp_domain_get"), JsFunction::new(cx, domain_get).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_domain_get_assemblies"), JsFunction::new(cx, domain_get_assemblies).expect("failed to create a js_function"));
@@ -238,6 +250,7 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) {
     set!(global_obj, cx, cx.string("il2cpp_class_get_name"), JsFunction::new(cx, class_get_name).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_domain_get"), JsFunction::new(cx, domain_get).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_domain_get_assemblies"), JsFunction::new(cx, domain_get_assemblies).expect("failed to create a js_function"));
+    set!(global_obj, cx, cx.string("il2cpp_class_from_name"), JsFunction::new(cx, class_from_name).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("il2cpp_alloc"), JsFunction::new(cx, alloc).expect("failed to create a js_function"));
     set!(global_obj, cx, cx.string("snorestop_create_buffer"), JsFunction::new(cx, create_buffer_js).expect("failed to create a js_function"));
     set!(cx.global(), cx, "__IL2CPP", global_obj);
