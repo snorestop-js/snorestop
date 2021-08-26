@@ -1,6 +1,6 @@
 use std::ffi::{CStr, CString};
 use std::mem::transmute;
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_void};
 use nodejs::neon::context::{Context, FunctionContext};
 use nodejs::neon::handle::Handle;
 use nodejs::neon::object::Object;
@@ -38,22 +38,30 @@ macro_rules! get_proc {
 }
 
 gen_statics! {
-    il2cpp_assembly_get_image = (*mut usize) -> *mut usize,
-    il2cpp_image_get_name = (*mut usize) -> *mut c_char,
-    il2cpp_image_get_filename = (*mut usize) -> *mut c_char,
-    il2cpp_image_get_assembly = (*mut usize) -> *mut usize,
-    il2cpp_image_get_class_count = (*mut usize) -> usize,
-    il2cpp_image_get_class = (*mut usize, usize) -> *mut usize,
-    il2cpp_class_get_namespace = (*mut usize) -> *mut c_char,
-    il2cpp_class_get_name = (*mut usize) -> *mut c_char,
-    il2cpp_domain_get = () -> *mut u8,
-    il2cpp_domain_get_assemblies = (*mut u8, *mut u8) -> *mut *mut u8,
-    il2cpp_alloc = (usize) -> *mut u8
+    il2cpp_assembly_get_image = (*mut c_void) -> *mut c_void,
+    il2cpp_image_get_name = (*mut c_void) -> *mut c_char,
+    il2cpp_image_get_filename = (*mut c_void) -> *mut c_char,
+    il2cpp_image_get_assembly = (*mut c_void) -> *mut c_void,
+    il2cpp_image_get_class_count = (*mut c_void) -> usize,
+    il2cpp_image_get_class = (*mut c_void, usize) -> *mut usize,
+    il2cpp_class_get_namespace = (*mut c_void) -> *mut c_char,
+    il2cpp_class_get_name = (*mut c_void) -> *mut c_char,
+    il2cpp_class_get_fields = (*mut c_void, *mut usize) -> *mut c_void,
+    il2cpp_field_get_parent = (*mut c_void) -> *mut c_void
+    il2cpp_field_get_name = (*mut c_void) -> *mut c_char
+    il2cpp_domain_get = () -> *mut c_void,
+    il2cpp_domain_get_assemblies = (*mut c_void, *mut usize) -> *mut *mut c_void,
+    il2cpp_alloc = (usize) -> *mut c_void
 }
 
-fn create_buffer(mut cx: FunctionContext, size: u32, address: Option<*mut u8>,) -> JsResult<JsArrayBuffer> {
+fn create_buffer(mut cx: FunctionContext, size: u32, address: Option<*mut c_void>) -> JsResult<JsArrayBuffer> {
     if let Some(address) = address {
-        let array_buffer = unsafe { JsArrayBuffer::external(&mut cx, std::slice::from_raw_parts_mut(address, size as usize)) };
+        let array_buffer = unsafe {
+            JsArrayBuffer::external(&mut cx, {
+                let data: &mut [u8] = transmute(std::slice::from_raw_parts_mut(address, size as usize));
+                data
+            })
+        };
         set!(array_buffer, &mut cx, cx.string("ptr"), cx.number(address as usize as f64));
         Ok(array_buffer)
     } else {
@@ -69,7 +77,7 @@ fn create_buffer_js(mut cx: FunctionContext) -> JsResult<JsArrayBuffer> {
     let size: Handle<JsNumber> = cx.argument(0)?;
     let address = cx.argument_opt(1).map(|arg| {
         let number: Handle<JsNumber>  = arg.downcast_or_throw(&mut cx).unwrap();
-        number.value(&mut cx) as usize as *mut u8
+        number.value(&mut cx) as usize as *mut c_void
     });
     let size = size.value(&mut cx) as u32;
     create_buffer(cx, size, address)
@@ -82,7 +90,7 @@ fn domain_get(mut cx: FunctionContext) -> JsResult<JsNumber> {
 fn domain_get_assemblies(mut cx: FunctionContext) -> JsResult<JsArray> {
     let domain: Handle<JsNumber> = cx.argument(0)?;
     let mut size = 0;
-    let assemblies = unsafe { il2cpp_domain_get_assemblies.unwrap()(domain.value(&mut cx) as i32 as *mut u8, &mut size) };
+    let assemblies = unsafe { il2cpp_domain_get_assemblies.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, &mut size) };
     let array = cx.empty_array();
 
     unsafe {
@@ -97,7 +105,7 @@ fn domain_get_assemblies(mut cx: FunctionContext) -> JsResult<JsArray> {
 fn assembly_get_image(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(unsafe {
       let domain: Handle<JsNumber> = cx.argument(0)?;
-      let imagePtr = il2cpp_assembly_get_image.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      let imagePtr = il2cpp_assembly_get_image.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
       cx.number(imagePtr as u32)
     })
 }
@@ -105,7 +113,7 @@ fn assembly_get_image(mut cx: FunctionContext) -> JsResult<JsNumber> {
 fn image_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
     Ok(unsafe {
       let domain: Handle<JsNumber> = cx.argument(0)?;
-      let strPtr = il2cpp_image_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      let strPtr = il2cpp_image_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
       cx.string(CStr::from_ptr(strPtr).to_str().expect("Failed to unwrap strPtr"))
     })
 }
@@ -113,7 +121,7 @@ fn image_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
 fn image_get_filename(mut cx: FunctionContext) -> JsResult<JsString> {
     Ok(unsafe {
       let domain: Handle<JsNumber> = cx.argument(0)?;
-      let strPtr = il2cpp_image_get_filename.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      let strPtr = il2cpp_image_get_filename.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
       cx.string(CStr::from_ptr(strPtr).to_str().expect("Failed to unwrap strPtr"))
     })
 }
@@ -121,7 +129,7 @@ fn image_get_filename(mut cx: FunctionContext) -> JsResult<JsString> {
 fn image_get_assembly(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(unsafe {
       let domain: Handle<JsNumber> = cx.argument(0)?;
-      let strPtr = il2cpp_image_get_assembly.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      let strPtr = il2cpp_image_get_assembly.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
       cx.number(strPtr as u32)
     })
 }
@@ -129,7 +137,7 @@ fn image_get_assembly(mut cx: FunctionContext) -> JsResult<JsNumber> {
 fn image_get_class_count(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(unsafe {
       let domain: Handle<JsNumber> = cx.argument(0)?;
-      let strPtr = il2cpp_image_get_class_count.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
+      let strPtr = il2cpp_image_get_class_count.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
       cx.number(strPtr as u32)
     })
 }
@@ -138,25 +146,61 @@ fn image_get_class(mut cx: FunctionContext) -> JsResult<JsNumber> {
     Ok(unsafe {
       let domain: Handle<JsNumber> = cx.argument(0)?;
       let domain2: Handle<JsNumber> = cx.argument(1)?;
-      let strPtr = il2cpp_image_get_class.unwrap()(domain.value(&mut cx) as i32 as *mut usize, domain2.value(&mut cx) as usize);
+      let strPtr = il2cpp_image_get_class.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, domain2.value(&mut cx) as usize);
       cx.number(strPtr as u32)
     })
 }
 
 fn class_get_namespace(mut cx: FunctionContext) -> JsResult<JsString> {
     Ok(unsafe {
-      let domain: Handle<JsNumber> = cx.argument(0)?;
-      let strPtr = il2cpp_class_get_namespace.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
-      cx.string(CStr::from_ptr(strPtr).to_str().expect("Failed to unwrap strPtr"))
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let strPtr = il2cpp_class_get_namespace.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.string(CStr::from_ptr(strPtr).to_str().expect("Failed to unwrap strPtr"))
     })
 }
 
 fn class_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
     Ok(unsafe {
-      let domain: Handle<JsNumber> = cx.argument(0)?;
-      let strPtr = il2cpp_class_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut usize);
-      cx.string(CStr::from_ptr(strPtr).to_str().expect("Failed to unwrap strPtr"))
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let strPtr = il2cpp_class_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.string(CStr::from_ptr(strPtr).to_str().expect("Failed to unwrap strPtr"))
     })
+}
+
+fn field_get_parent(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    Ok(unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let domain2: Handle<JsNumber> = cx.argument(1)?;
+        let str_ptr = il2cpp_field_get_parent.unwrap()(domain.value(&mut cx) as i32 as *mut c_void, domain2.value(&mut cx) as usize);
+        cx.number(str_ptr as u32)
+    })
+}
+
+fn field_get_name(mut cx: FunctionContext) -> JsResult<JsString> {
+    Ok(unsafe {
+        let domain: Handle<JsNumber> = cx.argument(0)?;
+        let str_ptr = il2cpp_field_get_name.unwrap()(domain.value(&mut cx) as i32 as *mut c_void);
+        cx.string(CStr::from_ptr(str_ptr).to_str().expect("Failed to unwrap str_ptr"))
+    })
+}
+
+fn class_get_fields(mut cx: FunctionContext) -> JsResult<JsArray> {
+    let class: Handle<JsNumber> = cx.argument(0)?;
+    let class = class.value(&mut cx);
+    let array = cx.empty_array();
+    let mut iter: usize = 0;
+    let mut i = 0;
+
+    loop {
+        let field = unsafe { il2cpp_class_get_fields.unwrap()(class as usize as *mut c_void, &mut iter) as usize };
+        if field == 0 {
+            break;
+        }
+        set!(array, &mut cx, cx.number(i as f64), cx.number(field as f64));
+        i += 1;
+    }
+
+    Ok(array)
 }
 
 fn alloc(mut cx: FunctionContext) -> JsResult<JsArrayBuffer> {
