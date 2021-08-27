@@ -1,12 +1,8 @@
-mod iat;
 mod bindings;
 
 use std::mem::transmute;
 use std::os::raw::c_char;
 
-use std::convert::TryInto;
-use std::ffi::CString;
-use std::ffi::CStr;
 use detour::static_detour;
 use nodejs::{
     neon::{
@@ -67,7 +63,7 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
             let channel = nodejs::channel();
             let (sender, receiver) = std::sync::mpsc::sync_channel(1);
             channel.send(move |mut cx| {
-                bindings::load_functions(GAME_ASSEMBLY, &mut cx);
+                bindings::load_functions(GAME_ASSEMBLY, &mut cx)?;
 
                 let string = cx.string(include_str!("./bootstrap.js"));
                 let js_handle_stdout_string = cx.string("__handleStdout");
