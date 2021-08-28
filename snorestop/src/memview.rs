@@ -1,4 +1,4 @@
-use std::ffi::{CStr, c_void, CString};
+use std::ffi::{CStr, c_void};
 
 use nodejs::neon::context::{Context, FunctionContext};
 use nodejs::neon::handle::Handle;
@@ -9,7 +9,7 @@ use nodejs::neon::types::{JsBox, JsFunction, JsNumber, JsObject, JsString, JsUnd
 
 use crate::{set, get};
 use std::sync::Mutex;
-use widestring::{U16CStr, U16String, U16Str};
+use widestring::{U16CStr, U16Str};
 
 pub struct View {
     head: usize,
