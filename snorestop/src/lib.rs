@@ -1,4 +1,6 @@
 mod bindings;
+mod memview;
+mod util;
 
 use std::mem::transmute;
 use std::os::raw::c_char;
@@ -63,6 +65,7 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
             let channel = nodejs::channel();
             let (sender, receiver) = std::sync::mpsc::sync_channel(1);
             channel.send(move |mut cx| {
+                memview::load_functions(&mut cx)?;
                 bindings::load_functions(GAME_ASSEMBLY, &mut cx)?;
 
                 let string = cx.string(include_str!("./bootstrap.js"));

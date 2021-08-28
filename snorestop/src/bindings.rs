@@ -11,23 +11,14 @@ use nodejs::neon::types::{JsArray, JsArrayBuffer, JsBoolean, JsFunction, JsNumbe
 use paste::paste;
 use winapi::shared::minwindef::HMODULE;
 use winapi::um::libloaderapi::GetProcAddress;
+use crate::set;
 
 macro_rules! gen_statics {
     ($($name: ident = ($($params: ty),*) -> $ret: ty),*) => {
         paste! {
             $(
-                static mut $name: Option<fn ($($params),*) -> $ret> = None;
+                pub static mut $name: Option<fn ($($params),*) -> $ret> = None;
             )*
-        }
-    };
-}
-
-macro_rules! set {
-    ($object: expr, $cx: expr, $name: expr, $value: expr) => {
-        {
-            let name = $name;
-            let value = $value;
-            $object.set($cx, name, value).expect(format!("failed to set value on {}", stringify!($object)).as_str())
         }
     };
 }
@@ -102,72 +93,8 @@ gen_statics! {
     il2cpp_object_get_class = (*mut usize) -> *mut c_char,
     il2cpp_object_new = (*mut usize) -> *mut usize,
     //memory
-    il2cpp_alloc = (usize) -> *mut c_void
-    // il2cpp_free = (*mut c_void) -> ()
-}
-
-fn create_buffer_readonly(mut cx: FunctionContext, size: u32, address: Option<*mut c_void>) -> JsResult<JsArrayBuffer> {
-    if let Some(address) = address {
-        let mut data2 = vec![0u8; size as usize];
-        let ptr = data2.as_ptr() as u32;
-
-        let array_buffer = unsafe {
-            JsArrayBuffer::external(&mut cx, {
-                let data: &mut [u8] = transmute(std::slice::from_raw_parts_mut(address, size as usize));
-                data2.clone_from_slice(data);
-                data2
-            })
-        };
-
-        set!(array_buffer, &mut cx, cx.string("ptr"), cx.number(ptr as usize as f64));
-        Ok(array_buffer)
-    } else {
-        let mut buffer = &mut vec![0u8; size as usize][..];
-        let ptr = buffer.as_mut_ptr();
-        let array_buffer = JsArrayBuffer::external(&mut cx, &mut buffer);
-        set!(array_buffer, &mut cx, cx.string("ptr"), cx.number(ptr as usize as f64));
-        Ok(array_buffer)
-    }
-}
-
-fn create_buffer_readonly_js(mut cx: FunctionContext) -> JsResult<JsArrayBuffer> {
-    let size: Handle<JsNumber> = cx.argument(0)?;
-    let address = cx.argument_opt(1).map(|arg| {
-        let number: Handle<JsNumber> = arg.downcast_or_throw(&mut cx).unwrap();
-        number.value(&mut cx) as usize as *mut c_void
-    });
-    let size = size.value(&mut cx) as u32;
-    create_buffer_readonly(cx, size, address)
-}
-
-fn create_buffer(mut cx: FunctionContext, size: u32, address: Option<*mut c_void>) -> JsResult<JsArrayBuffer> {
-    if let Some(address) = address {
-        let array_buffer = unsafe {
-            JsArrayBuffer::external(&mut cx, {
-                let data: &mut [u8] = transmute(std::slice::from_raw_parts_mut(address, size as usize));
-                data
-            })
-        };
-
-        set!(array_buffer, &mut cx, cx.string("ptr"), cx.number(address as usize as f64));
-        Ok(array_buffer)
-    } else {
-        let mut buffer = &mut vec![0u8; size as usize][..];
-        let ptr = buffer.as_mut_ptr();
-        let array_buffer = JsArrayBuffer::external(&mut cx, &mut buffer);
-        set!(array_buffer, &mut cx, cx.string("ptr"), cx.number(ptr as usize as f64));
-        Ok(array_buffer)
-    }
-}
-
-fn create_buffer_js(mut cx: FunctionContext) -> JsResult<JsArrayBuffer> {
-    let size: Handle<JsNumber> = cx.argument(0)?;
-    let address = cx.argument_opt(1).map(|arg| {
-        let number: Handle<JsNumber> = arg.downcast_or_throw(&mut cx).unwrap();
-        number.value(&mut cx) as usize as *mut c_void
-    });
-    let size = size.value(&mut cx) as u32;
-    create_buffer(cx, size, address)
+    il2cpp_alloc = (usize) -> *mut c_void,
+    il2cpp_free = (*mut c_void) -> ()
 }
 
 fn domain_get(mut cx: FunctionContext) -> JsResult<JsNumber> {
@@ -556,14 +483,14 @@ fn string_new(mut cx: FunctionContext) -> JsResult<JsNumber> {
     })
 }
 
-fn alloc(mut cx: FunctionContext) -> JsResult<JsArrayBuffer> {
+fn alloc(mut cx: FunctionContext) -> JsResult<JsNumber> {
     let size: Handle<JsNumber> = cx.argument(0)?;
     let size = size.value(&mut cx);
     if size > u32::MAX as f64 {
         panic!("Cannot allocate >4GB buffers!");
     }
     let buffer = unsafe { il2cpp_alloc.unwrap()(size as i32 as usize) };
-    create_buffer(cx, size as u32, Some(buffer))
+    Ok(cx.number(buffer as usize as f64))
 }
 
 fn gc_disable(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -668,9 +595,6 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) ->
     set!(global_obj, cx, cx.string("il2cpp_object_new"), JsFunction::new(cx, object_new)?);
     //memory
     set!(global_obj, cx, cx.string("il2cpp_alloc"), JsFunction::new(cx, alloc)?);
-    //snorestop specific functions
-    set!(global_obj, cx, cx.string("snorestop_create_buffer_readonly"), JsFunction::new(cx, create_buffer_readonly_js)?);
-    set!(global_obj, cx, cx.string("snorestop_create_buffer"), JsFunction::new(cx, create_buffer_js)?);
     set!(cx.global(), cx, "__IL2CPP", global_obj);
     Ok(())
 }
