@@ -94,7 +94,8 @@ gen_statics! {
     il2cpp_object_new = (*mut usize) -> *mut usize,
     //memory
     il2cpp_alloc = (usize) -> *mut c_void,
-    il2cpp_free = (*mut c_void) -> ()
+    il2cpp_free = (*mut c_void) -> (),
+    il2cpp_thread_attach = (*mut c_void) -> ()
 }
 
 fn domain_get(mut cx: FunctionContext) -> JsResult<JsNumber> {
@@ -501,9 +502,13 @@ fn gc_disable(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     Ok(cx.undefined())
 }
 
+pub(crate) fn get_early_funcs(module: HMODULE) {
+    get_proc!(module, il2cpp_domain_get);
+    get_proc!(module, il2cpp_thread_attach);
+}
+
 pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) -> NeonResult<()> {
     let global_obj = cx.empty_object();
-    get_proc!(module, il2cpp_domain_get);
     get_proc!(module, il2cpp_domain_get_assemblies);
     get_proc!(module, il2cpp_assembly_get_image);
     get_proc!(module, il2cpp_image_get_name);
@@ -540,6 +545,7 @@ pub(crate) fn load_functions<'a, C: Context<'a>>(module: HMODULE, cx: &mut C) ->
     get_proc!(module, il2cpp_string_new);
     get_proc!(module, il2cpp_gc_disable);
     get_proc!(module, il2cpp_alloc);
+    get_proc!(module, il2cpp_free);
 
     {
     }

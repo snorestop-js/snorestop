@@ -1,14 +1,15 @@
-use std::ffi::{CStr, c_void};
+use std::ffi::{CStr, c_void, CString};
 
 use nodejs::neon::context::{Context, FunctionContext};
 use nodejs::neon::handle::Handle;
 use nodejs::neon::object::Object;
 use nodejs::neon::prelude::Finalize;
 use nodejs::neon::result::{JsResult, NeonResult};
-use nodejs::neon::types::{JsBox, JsFunction, JsNumber, JsObject, JsString, JsUndefined};
+use nodejs::neon::types::{JsBox, JsFunction, JsNumber, JsObject, JsString, JsUndefined, JsBoolean};
 
 use crate::{set, get};
 use std::sync::Mutex;
+use widestring::{U16CStr, U16String, U16Str};
 
 pub struct View {
     head: usize,
@@ -60,13 +61,13 @@ impl View {
 
 fn get_head(mut cx: FunctionContext) -> JsResult<JsNumber> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     Ok(cx.number(view.head as f64))
 }
 
 fn get_offset(mut cx: FunctionContext) -> JsResult<JsNumber> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     Ok(cx.number(view.offset as f64))
 }
 
@@ -193,7 +194,14 @@ fn read_view(mut cx: FunctionContext) -> JsResult<JsObject> {
 fn read_cstring(mut cx: FunctionContext) -> JsResult<JsString> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
     let mut view = view.lock().unwrap();
-    let offset_arg = cx.argument_opt(0);
+    let is_u16 = cx.argument_opt(0);
+    let is_u16 = if let Some(is_u16) = is_u16 {
+        let is_u16: Handle<JsBoolean> = is_u16.downcast_or_throw(&mut cx)?;
+        is_u16.value(&mut cx)
+    } else {
+        false
+    };
+    let offset_arg = cx.argument_opt(1);
     let offset = if let Some(offset) = offset_arg {
         let offset: Handle<JsNumber> = offset.downcast_or_throw(&mut cx)?;
         view.head + offset.value(&mut cx) as usize
@@ -201,7 +209,7 @@ fn read_cstring(mut cx: FunctionContext) -> JsResult<JsString> {
         view.head + view.offset
     } as *mut i8;
     let (string, off) = unsafe {
-        let cs = CStr::from_ptr(offset).to_string_lossy();
+        let cs = if is_u16 { U16CStr::from_ptr_str(offset as *const u16).to_string_lossy() } else { CStr::from_ptr(offset).to_str().unwrap().to_string() };
         let length = cs.bytes().len();
         (cs, length)
     };
@@ -214,7 +222,14 @@ fn read_cstring(mut cx: FunctionContext) -> JsResult<JsString> {
 fn read_string(mut cx: FunctionContext) -> JsResult<JsString> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
     let mut view = view.lock().unwrap();
-    let length: Handle<JsNumber> = cx.argument(0)?;
+    let is_u16 = cx.argument_opt(0);
+    let is_u16 = if let Some(is_u16) = is_u16 {
+        let is_u16: Handle<JsBoolean> = is_u16.downcast_or_throw(&mut cx)?;
+        is_u16.value(&mut cx)
+    } else {
+        false
+    };
+    let length: Handle<JsNumber> = cx.argument(1)?;
     let length = length.value(&mut cx) as usize;
     let offset = cx.argument_opt(1);
     let offset = if let Some(offset) = offset {
@@ -225,12 +240,18 @@ fn read_string(mut cx: FunctionContext) -> JsResult<JsString> {
         view.offset += length;
         output
     } as *mut u8;
-    Ok(cx.string(unsafe { String::from_raw_parts(offset, length, length) }))
+    unsafe {
+        if is_u16 {
+            Ok(cx.string(U16Str::from_ptr(offset as *const u16, length).to_string().unwrap()))
+        } else {
+            Ok(cx.string(std::str::from_utf8(std::slice::from_raw_parts(offset, length)).unwrap()))
+        }
+    }
 }
 
 fn write_u8(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsNumber> = cx.argument(0)?;
     let offset_arg = cx.argument_opt(1);
     let offset = if let Some(offset) = offset_arg {
@@ -247,7 +268,7 @@ fn write_u8(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn write_i8(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsNumber> = cx.argument(0)?;
     let offset_arg = cx.argument_opt(1);
     let offset = if let Some(offset) = offset_arg {
@@ -264,7 +285,7 @@ fn write_i8(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn write_u16(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsNumber> = cx.argument(0)?;
     let offset_arg = cx.argument_opt(1);
     let offset = if let Some(offset) = offset_arg {
@@ -281,7 +302,7 @@ fn write_u16(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn write_i16(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsNumber> = cx.argument(0)?;
     let offset_arg = cx.argument_opt(1);
     let offset = if let Some(offset) = offset_arg {
@@ -298,7 +319,7 @@ fn write_i16(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn write_u32(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsNumber> = cx.argument(0)?;
     let offset_arg = cx.argument_opt(1);
     let offset = if let Some(offset) = offset_arg {
@@ -315,7 +336,7 @@ fn write_u32(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn write_i32(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsNumber> = cx.argument(0)?;
     let offset_arg = cx.argument_opt(1);
     let offset = if let Some(offset) = offset_arg {
@@ -332,7 +353,7 @@ fn write_i32(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn write_cstring(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsString> = cx.argument(0)?;
     let offset = cx.argument_opt(1);
     let offset = if let Some(offset) = offset {
@@ -353,7 +374,7 @@ fn write_cstring(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn write_string(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
+    let view = view.lock().unwrap();
     let value: Handle<JsString> = cx.argument(0)?;
     let offset = cx.argument_opt(1);
     let offset = if let Some(offset) = offset {
@@ -385,11 +406,9 @@ fn from_pointer(mut cx: FunctionContext) -> JsResult<JsObject> {
 
 fn free(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
-    let mut view = view.lock().unwrap();
-    let pointer: Handle<JsNumber> = cx.argument(0)?;
-    let pointer = pointer.value(&mut cx);
+    let view = view.lock().unwrap();
 
-    unsafe { crate::bindings::il2cpp_free.unwrap()(pointer as usize as *mut c_void) };
+    unsafe { crate::bindings::il2cpp_free.unwrap()(view.head as usize as *mut c_void) };
     Ok(cx.undefined())
 }
 

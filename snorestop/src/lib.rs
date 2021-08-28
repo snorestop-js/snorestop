@@ -58,7 +58,8 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
         let output = Il2cppInitDetour.call(domain_name);
         Il2cppInitDetour.enable().expect("failed to re-enable hook");
 
-
+        bindings::get_early_funcs(GAME_ASSEMBLY);
+        bindings::il2cpp_thread_attach.unwrap()(bindings::il2cpp_domain_get.unwrap()());
         //il2cpp has initialized by this point :)
 
         {
