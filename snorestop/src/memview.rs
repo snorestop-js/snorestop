@@ -222,16 +222,16 @@ fn read_cstring(mut cx: FunctionContext) -> JsResult<JsString> {
 fn read_string(mut cx: FunctionContext) -> JsResult<JsString> {
     let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
     let mut view = view.lock().unwrap();
-    let is_u16 = cx.argument_opt(0);
+    let is_u16 = cx.argument_opt(1);
     let is_u16 = if let Some(is_u16) = is_u16 {
         let is_u16: Handle<JsBoolean> = is_u16.downcast_or_throw(&mut cx)?;
         is_u16.value(&mut cx)
     } else {
         false
     };
-    let length: Handle<JsNumber> = cx.argument(1)?;
+    let length: Handle<JsNumber> = cx.argument(0)?;
     let length = length.value(&mut cx) as usize;
-    let offset = cx.argument_opt(1);
+    let offset = cx.argument_opt(2);
     let offset = if let Some(offset) = offset {
         let offset: Handle<JsNumber> = offset.downcast_or_throw(&mut cx)?;
         view.head + offset.value(&mut cx) as usize
