@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 winapi = { version = "0.3.9", features = ["winuser", "windef", "libloaderapi", "consoleapi", "winnt", "sysinfoapi", "wincon", "processthreadsapi", "memoryapi", "vadefs"] }
-nodejs = { git = "https://github.com/Sanae6/rust-nodejs" }
+nodejs = { path = "../../rust-nodejs" }
 napi-sys = { version = "1.1.1", features = [ "napi7" ]}
 paste = "1.0.5"
 detour = "0.8.1"

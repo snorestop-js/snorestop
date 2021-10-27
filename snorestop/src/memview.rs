@@ -24,7 +24,7 @@ impl Finalize for View {
 }
 
 impl View {
-    fn new<'a, C: Context<'a>>(mut cx: C, pointer: usize) -> JsResult<'a, JsObject> {
+    pub fn new<'a, C: Context<'a>>(mut cx: C, pointer: usize) -> JsResult<'a, JsObject> {
         let this = cx.empty_object();
         let box_var = JsBox::new(&mut cx, Mutex::new(View {
             head: pointer,
@@ -41,6 +41,8 @@ impl View {
         set!(this, &mut cx, cx.string("readI16"), JsFunction::new(&mut cx, read_i16)?);
         set!(this, &mut cx, cx.string("readU32"), JsFunction::new(&mut cx, read_u32)?);
         set!(this, &mut cx, cx.string("readI32"), JsFunction::new(&mut cx, read_i32)?);
+        set!(this, &mut cx, cx.string("readF32"), JsFunction::new(&mut cx, read_f32)?);
+        set!(this, &mut cx, cx.string("readF64"), JsFunction::new(&mut cx, read_f64)?);
         set!(this, &mut cx, cx.string("readPtr"), JsFunction::new(&mut cx, read_ptr)?);
         set!(this, &mut cx, cx.string("readView"), JsFunction::new(&mut cx, read_view)?);
         set!(this, &mut cx, cx.string("readCString"), JsFunction::new(&mut cx, read_cstring)?);
@@ -51,6 +53,8 @@ impl View {
         set!(this, &mut cx, cx.string("writeI16"), JsFunction::new(&mut cx, write_i16)?);
         set!(this, &mut cx, cx.string("writeU32"), JsFunction::new(&mut cx, write_u32)?);
         set!(this, &mut cx, cx.string("writeI32"), JsFunction::new(&mut cx, write_i32)?);
+        set!(this, &mut cx, cx.string("writeF32"), JsFunction::new(&mut cx, write_f32)?);
+        set!(this, &mut cx, cx.string("writeF64"), JsFunction::new(&mut cx, write_f64)?);
         set!(this, &mut cx, cx.string("writeCString"), JsFunction::new(&mut cx, write_cstring)?);
         set!(this, &mut cx, cx.string("writeString"), JsFunction::new(&mut cx, write_string)?);
         set!(this, &mut cx, cx.string("free"), JsFunction::new(&mut cx, free)?);
@@ -158,6 +162,36 @@ fn read_i32(mut cx: FunctionContext) -> JsResult<JsNumber> {
         view.offset += 4;
         output
     } as *mut i32;
+    Ok(cx.number(unsafe { *offset }))
+}
+
+fn read_f32(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
+    let mut view = view.lock().unwrap();
+    let offset = cx.argument_opt(0);
+    let offset = if let Some(offset) = offset {
+        let offset: Handle<JsNumber> = offset.downcast_or_throw(&mut cx)?;
+        view.head + offset.value(&mut cx) as usize
+    } else {
+        let output = view.head + view.offset;
+        view.offset += 4;
+        output
+    } as *mut f32;
+    Ok(cx.number(unsafe { *offset }))
+}
+
+fn read_f64(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
+    let mut view = view.lock().unwrap();
+    let offset = cx.argument_opt(0);
+    let offset = if let Some(offset) = offset {
+        let offset: Handle<JsNumber> = offset.downcast_or_throw(&mut cx)?;
+        view.head + offset.value(&mut cx) as usize
+    } else {
+        let output = view.head + view.offset;
+        view.offset += 8;
+        output
+    } as *mut f64;
     Ok(cx.number(unsafe { *offset }))
 }
 
@@ -347,6 +381,40 @@ fn write_i32(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     } as *mut i32;
 
     unsafe { *offset = value.value(&mut cx) as i32; }
+
+    Ok(cx.undefined())
+}
+
+fn write_f32(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
+    let view = view.lock().unwrap();
+    let value: Handle<JsNumber> = cx.argument(0)?;
+    let offset_arg = cx.argument_opt(1);
+    let offset = if let Some(offset) = offset_arg {
+        let offset: Handle<JsNumber> = offset.downcast_or_throw(&mut cx)?;
+        view.head + offset.value(&mut cx) as usize
+    } else {
+        view.head + view.offset
+    } as *mut f32;
+
+    unsafe { *offset = value.value(&mut cx) as f32; }
+
+    Ok(cx.undefined())
+}
+
+fn write_f64(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let view: Handle<JsBox<Mutex<View>>> = get!(cx.this(), &mut cx, cx.string("_box")).downcast_or_throw(&mut cx)?;
+    let view = view.lock().unwrap();
+    let value: Handle<JsNumber> = cx.argument(0)?;
+    let offset_arg = cx.argument_opt(1);
+    let offset = if let Some(offset) = offset_arg {
+        let offset: Handle<JsNumber> = offset.downcast_or_throw(&mut cx)?;
+        view.head + offset.value(&mut cx) as usize
+    } else {
+        view.head + view.offset
+    } as *mut f64;
+
+    unsafe { *offset = value.value(&mut cx) as f64; }
 
     Ok(cx.undefined())
 }
