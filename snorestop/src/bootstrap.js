@@ -20,7 +20,7 @@ try {
 
   const { Snorestop } = require('snorestop-core')
   const snorestop = new Snorestop();
-  const selfPackageJson = JSON.parse(fs.readFileSync(path.join(__amongus_dirname, "package.json"), "utf-8"));
+  const selfPackageJson = JSON.parse(fs.readFileSync(path.join(__snorestop_dirname, "package.json"), "utf-8"));
   Object.prototype.log = function (...data) {
     data.unshift(this);
     console.log.apply(console, [...data]);
