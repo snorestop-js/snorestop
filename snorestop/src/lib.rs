@@ -74,7 +74,8 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
                 let string = cx.string(include_str!("./bootstrap.js"));
                 let js_handle_stdout_string = cx.string("__handleStdout");
                 let js_handle_stderr_string = cx.string("__handleStderr");
-                let js_dirname_key_string = cx.string("__amongus_dirname");
+                let js_amongus_dirname_key_string = cx.string("__amongus_dirname");
+                let js_snorestop_dirname_key_string = cx.string("__snorestop_dirname");
 
                 let dirname = match env::current_exe() {
                     Ok(f) => f,
@@ -86,7 +87,8 @@ fn il2cpp_init(domain_name: *const c_char) -> bool {
                 let js_handle_stderr = JsFunction::new(&mut cx, __handle_stderr).expect("failed to create stderr handler function");
                 cx.global().set(&mut cx, js_handle_stdout_string, js_handle_stdout).expect("failed to set stdout handler global");
                 cx.global().set(&mut cx, js_handle_stderr_string, js_handle_stderr).expect("failed to set stderr handler global");
-                cx.global().set(&mut cx, js_dirname_key_string, js_dirname_string).expect("failed to set stderr handler global");
+                cx.global().set(&mut cx, js_amongus_dirname_key_string, js_dirname_string).expect("failed to set among us dirname global");
+                cx.global().set(&mut cx, js_snorestop_dirname_key_string, js_dirname_string).expect("failed to set snorestop dirname global");
 
                 eval(&mut cx, string).unwrap();
                 sender.send(()).unwrap();
